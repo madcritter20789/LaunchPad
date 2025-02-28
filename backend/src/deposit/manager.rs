@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum DepositStatus {
     Active,
     Released,
@@ -13,13 +14,13 @@ pub enum DepositStatus {
     Failed,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Deposit {
     pub token: Token,
     pub user_address: String,
     pub lock_until: DateTime<Utc>,
     pub status: DepositStatus,
-    // The USD value of the deposit computed at the time of deposit
+    // The USD value of the deposit computed at the time of deposit.
     pub usd_value: f64,
 }
 
@@ -35,6 +36,7 @@ impl DepositManager {
         }
     }
 
+    /// Starts the deposit manager's background task to monitor deposits.
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!("Deposit Manager started");
         self.monitor_deposits().await?;
@@ -42,7 +44,7 @@ impl DepositManager {
     }
 
     /// Creates a new deposit for an ICO contribution.
-    /// It converts the deposited token amount to USD using cross-chain conversion.
+    /// It converts the deposited token amount to USD using a simulated cross-chain conversion rate.
     pub async fn create_deposit(
         &self,
         token: Token,
@@ -76,10 +78,11 @@ impl DepositManager {
         deposits.clone()
     }
 
-    /// Periodically monitors deposits. Once the lock period expires, marks deposits as Released.
+    /// Periodically monitors deposits.
+    /// Once the lock period expires, marks deposits as Released.
     async fn monitor_deposits(&self) -> Result<(), Box<dyn std::error::Error>> {
         let deposits = self.deposits.clone();
-        
+
         tokio::spawn(async move {
             loop {
                 let mut deposits = deposits.lock().await;
@@ -103,14 +106,10 @@ impl DepositManager {
     /// Simulated cross-chain conversion rate function.
     /// Returns the USD conversion rate for a given chain.
     async fn get_conversion_rate(chain_id: &str, _token: &Token) -> Result<f64, Box<dyn std::error::Error>> {
-        // For demonstration, we simulate rates:
-        // - Ethereum: 1 ETH = 2000 USD
-        // - Bitcoin: 1 BTC = 30000 USD
-        // - Others: default 100 USD per token unit
         match chain_id {
-            "ethereum" => Ok(2000.0),
-            "bitcoin" => Ok(30000.0),
-            _ => Ok(100.0),
+            "ethereum" => Ok(2000.0), // 1 ETH = 2000 USD
+            "bitcoin"  => Ok(30000.0), // 1 BTC = 30000 USD
+            _ => Ok(100.0), // Default conversion rate
         }
     }
 }

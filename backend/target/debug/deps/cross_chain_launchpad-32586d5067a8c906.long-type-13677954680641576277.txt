@@ -1,0 +1,1 @@
+fn(State<DepositManager>) -> impl std::future::Future<Output = axum::Json<Vec<(std::string::String, Deposit)>>> {get_deposits}

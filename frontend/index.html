@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ICO Launchpad Frontend</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 1rem;
+    }
+    label {
+      display: inline-block;
+      width: 200px;
+    }
+    input, select {
+      width: 250px;
+      margin-bottom: 1rem;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 1rem;
+      width: 100%;
+      max-width: 800px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    #statusMessage {
+      margin: 1rem 0;
+      color: #006400; /* dark green for success, can style differently if needed */
+    }
+    .released {
+      color: #ff8c00; /* dark orange */
+      font-weight: bold;
+    }
+    .distributed {
+      color: #006400; /* dark green */
+      font-weight: bold;
+    }
+    .failed {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>ICO Launchpad</h1>
+  
+  <h2>Create a Deposit</h2>
+  <form id="depositForm">
+    <label for="chain_id">Token Chain:</label>
+    <select id="chain_id">
+      <option value="ethereum">Ethereum</option>
+      <option value="bitcoin">Bitcoin</option>
+      <option value="bsc">Binance Smart Chain</option>
+      <!-- Add more as needed -->
+    </select>
+    <br>
+
+    <label for="contract_address">Token Contract Address:</label>
+    <input type="text" id="contract_address" value="0xDepositTokenAddress">
+    <br>
+
+    <label for="amount">Token Amount:</label>
+    <input type="text" id="amount" value="1.5">
+    <br>
+
+    <label for="user_address">Your Address:</label>
+    <input type="text" id="user_address" value="0xUserAddress">
+    <br>
+
+    <label for="lock_duration">Lock Duration (seconds):</label>
+    <input type="number" id="lock_duration" value="60">
+    <br>
+
+    <button type="submit">Create Deposit</button>
+  </form>
+
+  <div id="statusMessage"></div>
+  
+  <h2>Current Deposits</h2>
+  <button id="refreshBtn">Refresh Deposits</button>
+  <table id="depositsTable">
+    <thead>
+      <tr>
+        <th>Deposit ID</th>
+        <th>Chain</th>
+        <th>Amount</th>
+        <th>User Address</th>
+        <th>USD Value</th>
+        <th>Status</th>
+        <th>Lock Until (UTC)</th>
+        <th>Time Left</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows are dynamically inserted here -->
+    </tbody>
+  </table>
+  
+  <script>
+    const API_BASE = 'http://localhost:3030';  // Adjust if needed
+
+    // On page load, automatically refresh deposits
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshDeposits();
+      // Optionally auto-refresh every X seconds:
+      setInterval(refreshDeposits, 5000); // 5 seconds
+    });
+
+    // Handle deposit creation form
+    document.getElementById('depositForm').addEventListener('submit', async function(event) {
+      event.preventDefault();
+      
+      const data = {
+        token_chain_id: document.getElementById('chain_id').value,
+        token_contract_address: document.getElementById('contract_address').value,
+        token_amount: document.getElementById('amount').value,
+        user_address: document.getElementById('user_address').value,
+        lock_duration: parseInt(document.getElementById('lock_duration').value)
+      };
+      
+      try {
+        const response = await fetch(`${API_BASE}/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        if (result.deposit_id) {
+          document.getElementById('statusMessage').textContent = `Deposit created with ID: ${result.deposit_id}`;
+          // Refresh to see the new deposit in the table
+          refreshDeposits();
+        } else {
+          document.getElementById('statusMessage').textContent = `Error: ${result.error || 'Unknown error'}`;
+        }
+      } catch (err) {
+        document.getElementById('statusMessage').textContent = `Error: ${err.message}`;
+      }
+    });
+    
+    // Refresh deposits button
+    document.getElementById('refreshBtn').addEventListener('click', refreshDeposits);
+
+    async function refreshDeposits() {
+      try {
+        const response = await fetch(`${API_BASE}/deposits`);
+        const depositsObj = await response.json();
+        renderDeposits(depositsObj);
+      } catch (err) {
+        console.error('Failed to fetch deposits:', err);
+      }
+    }
+
+    function renderDeposits(deposits) {
+      // `deposits` is a HashMap: { "depositId": { depositData }, ... }
+      // We'll convert it into an array for easy rendering.
+      const depositIds = Object.keys(deposits);
+      const tbody = document.querySelector('#depositsTable tbody');
+      tbody.innerHTML = ''; // clear existing rows
+
+      depositIds.forEach(depositId => {
+        const deposit = deposits[depositId];
+        // Create a row
+        const row = document.createElement('tr');
+        
+        // ID cell
+        const idCell = document.createElement('td');
+        idCell.textContent = depositId;
+        row.appendChild(idCell);
+
+        // Chain cell
+        const chainCell = document.createElement('td');
+        chainCell.textContent = deposit.token.chain_id;
+        row.appendChild(chainCell);
+
+        // Amount cell
+        const amountCell = document.createElement('td');
+        amountCell.textContent = deposit.token.amount;
+        row.appendChild(amountCell);
+
+        // User Address cell
+        const userCell = document.createElement('td');
+        userCell.textContent = deposit.user_address;
+        row.appendChild(userCell);
+
+        // USD Value cell
+        const usdCell = document.createElement('td');
+        usdCell.textContent = deposit.usd_value.toFixed(2);
+        row.appendChild(usdCell);
+
+        // Status cell
+        const statusCell = document.createElement('td');
+        statusCell.textContent = deposit.status;
+        // Optionally color-code
+        if (deposit.status === 'Released') {
+          statusCell.classList.add('released');
+        } else if (deposit.status === 'Distributed') {
+          statusCell.classList.add('distributed');
+        } else if (deposit.status === 'Failed') {
+          statusCell.classList.add('failed');
+        }
+        row.appendChild(statusCell);
+
+        // Lock Until
+        const lockCell = document.createElement('td');
+        lockCell.textContent = deposit.lock_until;
+        row.appendChild(lockCell);
+
+        // Time Left
+        const timeLeftCell = document.createElement('td');
+        timeLeftCell.textContent = calculateTimeLeft(deposit.lock_until, deposit.status);
+        row.appendChild(timeLeftCell);
+
+        tbody.appendChild(row);
+      });
+    }
+
+    // Calculates a countdown to the lock_until time if deposit is still active
+    function calculateTimeLeft(lockUntilStr, status) {
+      // If it's already Released/Distributed/Failed, no countdown needed
+      if (status !== 'Active') {
+        return 'N/A';
+      }
+      const now = new Date().getTime();
+      const lockTime = new Date(lockUntilStr).getTime();
+      const diff = lockTime - now;
+      if (diff <= 0) {
+        return '0s (will update soon)';
+      }
+      // Convert diff (ms) to a more readable format, e.g. HH:MM:SS
+      const seconds = Math.floor(diff / 1000) % 60;
+      const minutes = Math.floor(diff / (1000 * 60)) % 60;
+      const hours = Math.floor(diff / (1000 * 60 * 60)) % 24;
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      let result = '';
+      if (days > 0) {
+        result += days + 'd ';
+      }
+      if (hours > 0) {
+        result += hours + 'h ';
+      }
+      if (minutes > 0) {
+        result += minutes + 'm ';
+      }
+      result += seconds + 's';
+      return result;
+    }
+  </script>
+</body>
+</html>
